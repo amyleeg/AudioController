@@ -4,15 +4,13 @@ import csv
 import os
 import statistics
 
-# ── Mixer pre-init (must happen before pygame.init) ───────────────────────────
-# Buffer size directly controls latency: smaller = lower latency, higher CPU
-# 512 samples @ 48kHz = ~10.7ms theoretical minimum
+
 import sys
 BUFFER_SIZES = [256, 512, 1024, 2048]
-buffer_index = 1  # kept for the log_latency reference, but won't change
-BUFFER_SIZE  = int(sys.argv[1]) if len(sys.argv) > 1 else 512     # start at 512
+buffer_index = 1
+BUFFER_SIZE  = int(sys.argv[1]) if len(sys.argv) > 1 else 512
 SAMPLE_RATE    = 48000
-CHANNELS_COUNT = 2          # stereo
+CHANNELS_COUNT = 2
 
 def init_mixer(buf_size):
     pygame.mixer.quit()
@@ -22,7 +20,7 @@ def init_mixer(buf_size):
     print(f"Mixer init: {SAMPLE_RATE}Hz  buffer={buf_size} samples  "
           f"theoretical latency={round(buf_size/SAMPLE_RATE*1000,2)}ms")
 
-# ── Init ──────────────────────────────────────────────────────────────────────
+
 pygame.init()
 screen = pygame.display.set_mode((560, 420))
 pygame.display.set_caption("Audio Controller")
@@ -32,31 +30,29 @@ font_xs = pygame.font.SysFont(None, 18)
 
 init_mixer(BUFFER_SIZE)
 
-# ── Load sounds ───────────────────────────────────────────────────────────────
+
 sound1 = pygame.mixer.Sound("sounds/loop1.wav")
 sound2 = pygame.mixer.Sound("sounds/loop2.wav")
 sound3 = pygame.mixer.Sound("sounds/loop3.wav")
 
 SOUNDS = {"sound1": sound1, "sound2": sound2, "sound3": sound3}
 
-# ── Config ────────────────────────────────────────────────────────────────────
+
 FADE_MS = 800
 
-# ── State ─────────────────────────────────────────────────────────────────────
+
 master_volume = 0.5
 paused        = False
 
-# Per-sound volumes (independent faders)
+
 sound_volumes = {"sound1": 0.8, "sound2": 0.8, "sound3": 0.8}
 selected_sound = "sound1"   # which sound the per-sound vol keys affect
 
 active_channels = {"sound1": None, "sound2": None, "sound3": None}
 
-# ── Latency logging ───────────────────────────────────────────────────────────
-# Every keydown action is timed and written to latency_log.csv
-# Columns: timestamp, action, latency_ms, buffer_size, jitter_ms
+
 LOG_FILE      = "latency_log.csv"
-latency_hist  = []   # rolling history for jitter calculation
+latency_hist  = []
 
 def _ensure_log():
     if not os.path.exists(LOG_FILE):
@@ -67,7 +63,7 @@ def _ensure_log():
 def log_latency(action, latency_ms):
     """Record one latency measurement; calculate jitter from recent history."""
     latency_hist.append(latency_ms)
-    if len(latency_hist) > 50:          # keep last 50 readings
+    if len(latency_hist) > 50:
         latency_hist.pop(0)
 
     jitter = round(statistics.stdev(latency_hist), 3) if len(latency_hist) > 1 else 0.0
@@ -83,7 +79,7 @@ def log_latency(action, latency_ms):
         ])
     return jitter
 
-# ── Recording state ───────────────────────────────────────────────────────────
+
 recording        = False
 recorded_snippet = []
 record_start     = 0.0
@@ -112,7 +108,7 @@ def stop_recording():
     print(f">>> RECORDING stopped — {len(recorded_snippet)} events over {dur}s")
     print("    Press P to replay.")
 
-# ── Replay ────────────────────────────────────────────────────────────────────
+
 def replay_snippet():
     if not recorded_snippet:
         print("Nothing recorded. Press R to start recording.")
@@ -186,7 +182,6 @@ def _execute_event(ev):
     elif action == "unpause":
         pygame.mixer.unpause()
 
-# ── Volume helpers ────────────────────────────────────────────────────────────
 def _apply_all_volumes():
     for key, ch in active_channels.items():
         if ch:
@@ -197,7 +192,6 @@ def _apply_sound_volume(key):
     if ch:
         ch.set_volume(sound_volumes[key] * master_volume)
 
-# ── Draw UI ───────────────────────────────────────────────────────────────────
 def draw_ui():
     BLACK  = (10,  10,  10)
     WHITE  = (240, 240, 240)
@@ -211,15 +205,16 @@ def draw_ui():
 
     screen.fill(BLACK)
 
-    # ── Title ─────────────────────────────────────────────────────────────────
+
     screen.blit(font.render("Audio Controller", True, WHITE), (16, 12))
 
-    # ── Buffer size indicator ─────────────────────────────────────────────────
+
     th = round(BUFFER_SIZE / SAMPLE_RATE * 1000, 1)
     buf_txt = font_xs.render(
         f"Buffer: {BUFFER_SIZE} samples  (~{th}ms)  session fixed", True, BLUE)
+    screen.blit(buf_txt, (16, 36))
 
-    # ── Latency stats ─────────────────────────────────────────────────────────
+
     if latency_hist:
         avg_l = round(sum(latency_hist) / len(latency_hist), 2)
         jit_l = round(statistics.stdev(latency_hist), 2) if len(latency_hist) > 1 else 0.0
@@ -228,7 +223,7 @@ def draw_ui():
             True, YELLOW)
         screen.blit(lat_txt, (16, 52))
 
-    # ── REC indicator ─────────────────────────────────────────────────────────
+
     if recording:
         dot = RED if int(time.time() * 2) % 2 == 0 else ORANGE
         pygame.draw.circle(screen, dot, (530, 24), 10)
@@ -237,7 +232,7 @@ def draw_ui():
     snip = f"Snippet: {len(recorded_snippet)} events" if recorded_snippet else "Snippet: empty"
     screen.blit(font_xs.render(snip, True, GRAY), (16, 68))
 
-    # ── Sound toggles + per-sound volume bars ─────────────────────────────────
+
     labels = ["sound1 [1]", "sound2 [2]", "sound3 [3]"]
     keys   = ["sound1",     "sound2",     "sound3"]
     for i, (lbl, key) in enumerate(zip(labels, keys)):
@@ -250,25 +245,25 @@ def draw_ui():
         pygame.draw.rect(screen, border, (x, 88, 160, 36), 2, border_radius=5)
         screen.blit(font_xs.render(lbl + (" ◀" if sel else ""), True, WHITE), (x + 8, 100))
 
-        # Per-sound volume bar
+
         sv = sound_volumes[key]
         pygame.draw.rect(screen, DIM,   (x, 128, 160, 7), border_radius=3)
         pygame.draw.rect(screen, BLUE,  (x, 128, int(160 * sv), 7), border_radius=3)
         screen.blit(font_xs.render(f"{round(sv*100)}%", True, GRAY), (x, 138))
 
-    # Select sound hint
+
     screen.blit(font_xs.render("Tab = select sound   +/- = per-sound vol", True, GRAY), (16, 155))
 
-    # ── Master volume bar ─────────────────────────────────────────────────────
+
     screen.blit(font_sm.render(f"Master vol: {round(master_volume*100)}%", True, WHITE), (16, 174))
     pygame.draw.rect(screen, DIM,   (16, 194, 300, 10), border_radius=4)
     pygame.draw.rect(screen, GREEN, (16, 194, int(300 * master_volume), 10), border_radius=4)
 
-    # ── Paused ────────────────────────────────────────────────────────────────
+
     if paused:
         screen.blit(font.render("⏸  PAUSED", True, ORANGE), (16, 210))
 
-    # ── Legend ────────────────────────────────────────────────────────────────
+
     legend = [
         "1/2/3    toggle sounds (fade in/out)",
         "UP/DN    master volume",
@@ -285,11 +280,11 @@ def draw_ui():
 
     pygame.display.flip()
 
-# ── Main loop ─────────────────────────────────────────────────────────────────
+
 _ensure_log()
 print(f"Latency measurements will be saved to: {os.path.abspath(LOG_FILE)}")
 print("Controls: 1/2/3=toggle  UP/DN=master vol  Tab=select  +/-=per-vol")
-print("          L=sync  S=stop  SPACE=pause  R=record  P=replay  [/]=buffer  Q=quit")
+print("          L=sync  S=stop  SPACE=pause  R=record  P=replay  Q=quit")
 
 clock   = pygame.time.Clock()
 running = True
@@ -303,7 +298,7 @@ while running:
             t0     = time.time()
             action = None
 
-            # ── Toggle sounds ─────────────────────────────────────────────────
+
             if event.key == pygame.K_1:
                 action = "toggle_sound1"
                 if active_channels["sound1"] is None:
@@ -349,7 +344,7 @@ while running:
                     log_event("toggle_off", {"sound": "sound3"})
                     print("sound3 OFF")
 
-            # ── Sync loops ────────────────────────────────────────────────────
+
             elif event.key == pygame.K_l:
                 action = "sync_start"
                 pygame.mixer.fadeout(FADE_MS)
@@ -363,7 +358,7 @@ while running:
                 log_event("sync_start", {"mvol": master_volume})
                 print("Sync loops started")
 
-            # ── Stop all ──────────────────────────────────────────────────────
+
             elif event.key == pygame.K_s:
                 action = "stop_all"
                 pygame.mixer.fadeout(FADE_MS)
@@ -371,7 +366,7 @@ while running:
                 log_event("stop_all")
                 print("All sounds stopping...")
 
-            # ── Master volume ─────────────────────────────────────────────────
+
             elif event.key == pygame.K_UP:
                 action = "master_vol_up"
                 master_volume = min(round(master_volume + 0.1, 1), 1.0)
@@ -386,14 +381,15 @@ while running:
                 log_event("master_volume", {"volume": master_volume})
                 print(f"Master volume: {round(master_volume*100)}%")
 
-            # ── Select sound (Tab cycles through sound1/2/3) ──────────────────
+
             elif event.key == pygame.K_TAB:
+                global selected_sound
                 keys_list = ["sound1", "sound2", "sound3"]
                 selected_sound = keys_list[
                     (keys_list.index(selected_sound) + 1) % 3]
                 print(f"Selected: {selected_sound}")
 
-            # ── Per-sound volume ──────────────────────────────────────────────
+
             elif event.key in (pygame.K_EQUALS, pygame.K_PLUS):
                 action = f"svol_up_{selected_sound}"
                 sound_volumes[selected_sound] = min(
@@ -412,7 +408,7 @@ while running:
                            "volume": sound_volumes[selected_sound]})
                 print(f"{selected_sound} vol: {round(sound_volumes[selected_sound]*100)}%")
 
-            # ── Pause / play ──────────────────────────────────────────────────
+
             elif event.key == pygame.K_SPACE:
                 action = "pause_toggle"
                 if paused:
@@ -426,27 +422,27 @@ while running:
                     log_event("pause")
                     print("PAUSED")
 
-            # ── Record ────────────────────────────────────────────────────────
+
             elif event.key == pygame.K_r:
                 if not recording:
                     start_recording()
                 else:
                     stop_recording()
 
-            # ── Replay ────────────────────────────────────────────────────────
+
             elif event.key == pygame.K_p:
                 replay_snippet()
 
-            # ── Quit ──────────────────────────────────────────────────────────
+
             elif event.key == pygame.K_q:
                 running = False
 
-            # ── Log latency for every keyed action ────────────────────────────
+
             latency_ms = (time.time() - t0) * 1000
             if action:
                 jitter = log_latency(action, latency_ms)
                 print(f"  latency={round(latency_ms,3)}ms  jitter={jitter}ms  "
-                      f"buf={BUFFER_SIZES[buffer_index]}")
+                      f"buf={BUFFER_SIZE}")
 
     draw_ui()
     clock.tick(60)
