@@ -383,7 +383,6 @@ while running:
 
 
             elif event.key == pygame.K_TAB:
-                global selected_sound
                 keys_list = ["sound1", "sound2", "sound3"]
                 selected_sound = keys_list[
                     (keys_list.index(selected_sound) + 1) % 3]
